@@ -1,0 +1,66 @@
+{
+  "stripLegendLore": true,
+
+  "legendRenames": {
+    "Thor": "Tony",
+    "Loki": "Larry",
+    "Artemis": "Aaminah",
+    "Orion": "'Umar",
+    "Cross": "Man with Holograms",
+    "Imugi": "Big Turtle",
+    "Munin": "Raven"
+  },
+
+  "mapRenames": {
+    "Demon Island": "Damon's Island",
+    "Demon Island CTF": "Damon's Island CTF",
+    "Western Air Temple": "Western Air Apartment",
+    "Western Air Temple Brawl": "Western Air Apartment Brawl",
+    "Spirit Realm Showdown": "Kung-Fu Panda Showdown",
+    "Lich's Tomb": "Skeleton Tomb"
+  },
+
+  "advanced": {
+    "_comment": "Verified against a real install. Only change these if a pass reports MISS. Run with --dump to see the exact names your game version uses.",
+
+    "_where": "Legend names are in HeroTypes.xml (Game.swz). Map names are in LevelTypes.xml (Init.swz). Legend lore is NOT in the archives at all - it lives in languages/language.N.bin, matched by loreKeyPattern.",
+
+    "loreKeyPattern": "^HeroType_.*_Bio",
+
+    "loreFields": [],
+
+    "legendDisplayFields": [ "HeroDisplayName", "BioName" ],
+
+    "levelDisplayFields": [ "DisplayName" ],
+
+    "protectedFields": [
+      "LegendName",
+      "LevelName",
+      "DevName",
+      "HeroType",
+      "BotName",
+      "CostumeName",
+      "Portrait",
+      "PortraitFileName",
+      "SoundBank",
+      "NameSoundEvent",
+      "OnSelectedSoundEvent",
+      "Rewards",
+      "MissionTags",
+      "AssetName",
+      "FileName",
+      "BGMusic",
+      "ThumbnailPNGFile"
+    ],
+
+    "renameInStringTables": true,
+
+    "stringTableGlobs": [ "strings*.csv", "language*.csv", "*Strings*.csv" ],
+
+    "caseInsensitiveMatch": true,
+
+    "normalizeApostrophes": true,
+
+    "ignoreDiacritics": true
+  }
+}

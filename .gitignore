@@ -1,0 +1,23 @@
+# --- Guardrail: never commit the user's game files ---
+# Brawlhalla archives, game code, and anything dumped out of them.
+*.swz
+*.swf
+swz_backup/
+dump/
+*-dump/
+
+# ...but these patterns also match a directory of that name, and one of the vendored
+# projects is called AbcDisassembler.Swf. Re-include it or a fresh clone will not build.
+!vendor/AbcDisassembler/AbcDisassembler.Swf/
+
+# Build output
+bin/
+obj/
+dist/
+
+# OS / editor
+.DS_Store
+.vs/
+.vscode/
+.idea/
+*.user

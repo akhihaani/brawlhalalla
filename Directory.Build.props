@@ -1,0 +1,11 @@
+<Project>
+
+  <!-- Applies to the app, the tests, and the vendored libraries alike, so a Release publish
+       produces exactly one file per platform with no debug symbols alongside it. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

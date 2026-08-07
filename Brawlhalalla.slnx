@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Brawlhalalla/Brawlhalalla.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Brawlhalalla.SelfTest/Brawlhalalla.SelfTest.csproj" />
+  </Folder>
+  <Folder Name="/vendor/" />
+  <Folder Name="/vendor/AbcDisassembler/">
+    <Project Path="vendor/AbcDisassembler/AbcDisassembler.Swf/AbcDisassembler.Swf.csproj" />
+    <Project Path="vendor/AbcDisassembler/AbcDisassembler/AbcDisassembler.csproj" />
+  </Folder>
+  <Folder Name="/vendor/BrawlhallaSwz/">
+    <Project Path="vendor/BrawlhallaSwz/BrawlhallaSwz/BrawlhallaSwz.csproj" />
+  </Folder>
+</Solution>
