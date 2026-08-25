@@ -6,10 +6,11 @@ some Legends and maps. Everything else is left exactly as it was.
 It is cosmetic and client-side only. It changes no gameplay values, no hitboxes, nothing that could
 be an advantage.
 
-> **⚠ Online play does not work with the full patch.**
-> Brawlhalla validates its game files, and a fully patched install is rejected with an
-> "old version" message. See [Online play](#online-play) below — this is a real limitation,
-> not a bug that can be fixed.
+> **Online play: use `--only languages`.**
+> The full patch breaks online — Brawlhalla validates its archives and rejects a modified
+> install. Running with `--only languages` removes all the lore and most of the renames
+> without touching those archives, and online play worked in testing.
+> See [Online play](#online-play).
 
 **[⬇ Download the latest release](https://github.com/akhihaani/brawlhalalla/releases/latest)** —
 Windows, Mac and Linux. No installation required.
@@ -99,9 +100,11 @@ program falls back to identical built-in defaults.
 
 ## Online play
 
-**Confirmed by testing:** with the full patch applied, Brawlhalla reports "you are on an old
+**Confirmed by testing:** with the **full** patch applied, Brawlhalla reports "you are on an old
 version" and refuses online play. Verifying the game files through Steam restores online
 immediately; re-applying the full patch breaks it again. It reproduces every time.
+
+With **`--only languages`**, online play worked.
 
 This is Brawlhalla doing its job. It is a lockstep fighting game — every player must simulate
 identical frames — so the client's data files have to match what the server expects. Modified
@@ -110,32 +113,38 @@ archives fail that check.
 **This tool will not try to defeat that check.** No patching the validation out of the game, no
 faking the values it reports. That is circumventing anti-cheat and a good way to lose an account.
 
-### What might still work online
+### The online-safe mode
 
-The patch touches two very different kinds of file:
+The lore is **not in the archives**. It lives in `languages/language.N.bin`, which are separate
+files holding pure display text that cannot affect the simulation — and in testing they are not
+validated.
 
-| | Contains | Inside the validated archives? |
+```
+Brawlhalalla --only languages
+```
+
+That gives you:
+
+| | `--only languages` | Full patch |
 |---|---|---|
-| `languages/language.N.bin` | **All Legend lore**, store/costume name text | No — separate files |
-| `Init.swz` / `Game.swz` | Map names, roster and bio names | Yes |
+| Legend lore removed | ✅ all of it, 13 languages | ✅ |
+| Legend names in store / costume text | ✅ | ✅ |
+| Legend names on the roster and bio screen | ❌ | ✅ |
+| Map names | ❌ | ✅ |
+| **Online play** | ✅ worked in testing | ❌ "old version" |
 
-The lore is not in the archives. Language files are display text and cannot affect the simulation,
-so they may not be validated at all. If so, lore removal — the main feature — could work online with
-no archive changes at all.
+So the main feature — removing every Legend's lore — works online. Only the roster/bio name fields
+and the map names need the archives, and those are the parts that break it.
 
-`--only` exists to find out, by changing one thing at a time:
+`--only` also accepts individual archives if you want to narrow down further:
 
 ```
---only languages                    lore only, no archive touched
 --only languages,Init.swz           adds map names
---only languages,Init.swz,Game.swz  adds roster names
+--only languages,Init.swz,Game.swz  adds roster names (same as the full patch)
 ```
 
-Verify your game files through Steam first so you start clean, then run one, launch, and try online.
-The first one that breaks online tells you where the limit is. Use `--restore` between tests.
-
-If you find out where the line is, please open an issue and say so — it decides whether this is an
-offline-only tool or a mostly-online one.
+This has been tested on one install and one game version. If online behaves differently for you,
+please open an issue and say which combination you used.
 
 ### Either way
 
