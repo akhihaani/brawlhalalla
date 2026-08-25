@@ -39,14 +39,20 @@ static class Cli
             Console.Error.WriteLine();
             Console.Error.WriteLine("  FAILED: " + ex.Message);
             if (ex is not InstallNotFoundException and not InvalidOperationException
-                and not SwzException and not EditValidationException and not FileNotFoundException)
+                and not SwzException and not EditValidationException and not FileNotFoundException
+                and not StaleBackupException and not LanguageFileException)
             {
                 Console.Error.WriteLine();
                 Console.Error.WriteLine(ex.ToString());
             }
             Console.Error.WriteLine();
             Console.Error.WriteLine("  Nothing was written unless a step above says otherwise.");
-            Console.Error.WriteLine("  If your game misbehaves, re-run with --restore to put the originals back.");
+
+            // Pointing at --restore would be absurd when --restore is what just refused, and
+            // actively wrong when the backup is the thing that cannot be trusted.
+            if (ex is not StaleBackupException && !options.Restore)
+                Console.Error.WriteLine("  If your game misbehaves, re-run with --restore to put the originals back.");
+
             Pause(options.Pause);
             return 1;
         }
@@ -59,6 +65,19 @@ static class Cli
 
         if (options.Restore)
         {
+            Config restoreConfig = Config.Load(options.ConfigPath, out _);
+            if (BackupLooksPatched(install, restoreConfig))
+            {
+                throw new StaleBackupException(
+                    $"REFUSING TO RESTORE — the files in {Install.BackupDirName}/ are already modified.\n\n" +
+                    "  They are not your originals, so restoring them would put the modified files\n" +
+                    "  straight back and change nothing.\n\n" +
+                    "  Do this instead:\n" +
+                    "    Steam -> right-click Brawlhalla -> Properties -> Installed Files\n" +
+                    "         -> Verify integrity of game files\n\n" +
+                    $"  Then delete the {Install.BackupDirName}/ folder so a proper backup gets taken next run.");
+            }
+
             List<string> restored = Install.Restore(install);
             Console.WriteLine($"  Restored {restored.Count} file(s) from {Install.BackupDirName}/: {string.Join(", ", restored)}");
             Console.WriteLine("  Your game files are back to their original state.");
@@ -97,15 +116,53 @@ static class Cli
             return;
         }
 
+        // A backup is only worth anything if it is taken from untouched files. If we would have to
+        // create one now, but the game already carries our edits, then there is no pristine copy
+        // left to preserve — and silently saving the patched state as "the originals" would destroy
+        // the user's only way back.
+        bool needsFreshBackup = !Directory.Exists(Path.Combine(install, Install.BackupDirName))
+                                || Install.BackupIsStale(install);
+
+        if (needsFreshBackup && LooksAlreadyPatched(install, config))
+        {
+            throw new StaleBackupException(
+                "REFUSING TO PATCH — your game files have already been modified, and there is no\n" +
+                "  usable backup of the originals.\n\n" +
+                "  Taking a backup now would just save the already-modified files as if they were\n" +
+                "  the originals, leaving you no way back.\n\n" +
+                "  Do this first:\n" +
+                "    Steam -> right-click Brawlhalla -> Properties -> Installed Files\n" +
+                "         -> Verify integrity of game files\n\n" +
+                "  That restores the untouched files. Then run this again and it will take a proper\n" +
+                "  backup before changing anything.");
+        }
+
+        Report report = new();
+
         BackupResult backup = Install.Backup(install);
-        if (backup.Created)
+        if (backup.StaleBackupMovedTo is not null)
+        {
+            Console.WriteLine($"  Brawlhalla has been updated since the last backup was taken.");
+            Console.WriteLine($"  The old backup was moved to {Path.GetFileName(backup.StaleBackupMovedTo)}/ (it belongs to the");
+            Console.WriteLine($"  previous game version, so restoring it would have downgraded your files).");
+            Console.WriteLine($"  Took a fresh backup of {backup.FilesAdded.Count} file(s) into {Install.BackupDirName}/");
+        }
+        else if (backup.Created)
             Console.WriteLine($"  Backed up {backup.FilesAdded.Count} original file(s) to {Install.BackupDirName}/");
         else if (backup.FilesAdded.Count > 0)
             Console.WriteLine($"  Backup already existed; added missing file(s): {string.Join(", ", backup.FilesAdded)}");
+        else if (BackupLooksPatched(install, config))
+        {
+            // An existing backup that already carries our edits is not a way back to anything.
+            report.Warn(
+                $"The files in {Install.BackupDirName}/ are already modified, so they are NOT your originals. " +
+                $"--restore would only restore the modified state. To get a real backup: verify your game " +
+                $"files through Steam, delete the {Install.BackupDirName}/ folder, then run this again.");
+            Console.WriteLine($"  Backup exists at {Install.BackupDirName}/ — WARNING: it is not pristine (see below).");
+        }
         else
             Console.WriteLine($"  Backup already exists at {Install.BackupDirName}/ — keeping it (originals are safe).");
 
-        Report report = new();
         RenameTable legends = new(config.LegendRenames, config.Advanced);
         RenameTable maps = new(config.MapRenames, config.Advanced);
 
@@ -118,6 +175,12 @@ static class Cli
             if (!File.Exists(archivePath))
             {
                 report.Warn($"{name} not found in the install folder — skipped.");
+                continue;
+            }
+
+            if (!options.Includes(name))
+            {
+                Console.WriteLine($"  {name,-16} skipped (--only)");
                 continue;
             }
 
@@ -150,8 +213,10 @@ static class Cli
         }
 
         // The Legend lore lives in the language files, not the archives.
-        List<string> languageFiles = [.. LanguageFile.FindFiles(install)];
-        if (languageFiles.Count == 0)
+        List<string> languageFiles = options.Includes("languages") ? [.. LanguageFile.FindFiles(install)] : [];
+        if (!options.Includes("languages"))
+            Console.WriteLine($"  {"languages",-16} skipped (--only)");
+        else if (languageFiles.Count == 0)
         {
             report.Warn($"No {LanguageFile.DirectoryName}/{LanguageFile.SearchPattern} files found — " +
                         "Legend lore could not be stripped, because that text lives in those files.");
@@ -228,6 +293,33 @@ static class Cli
         Console.WriteLine("    - If it does not start, run this program again with --restore, and do");
         Console.WriteLine("      not apply the patch. Please report it rather than retrying.");
         Line();
+    }
+
+    /// <summary>
+    /// Cheap probe for "has this install already been patched by us?", using a single language
+    /// file. Looks for lore that has already been emptied, or a configured replacement name already
+    /// sitting in the text.
+    /// </summary>
+    private static bool LooksAlreadyPatched(string install, Config config)
+    {
+        string? sample = LanguageFile.FindFiles(install).FirstOrDefault();
+        if (sample is null) return false;
+
+        try
+        {
+            return Passes.LooksAlreadyPatched(LanguageFile.Read(sample), config);
+        }
+        catch (LanguageFileException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Whether the files sitting in the backup folder already carry our edits.</summary>
+    private static bool BackupLooksPatched(string install, Config config)
+    {
+        string backupDir = Path.Combine(install, Install.BackupDirName);
+        return Directory.Exists(backupDir) && LooksAlreadyPatched(backupDir, config);
     }
 
     private static void Dump(string install, uint key, string dumpDir)
@@ -408,6 +500,15 @@ sealed class Options
     public bool Pause = true;
     public uint? Key;
 
+    /// <summary>
+    /// Restricts the patch to named targets ("languages", "Init.swz", ...). Empty means everything.
+    /// Exists so you can find out which files a game version actually tolerates being modified,
+    /// by changing one thing at a time instead of all seventeen at once.
+    /// </summary>
+    public readonly HashSet<string> Only = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool Includes(string target) => Only.Count == 0 || Only.Contains(target);
+
     public static Options Parse(string[] args)
     {
         Options options = new();
@@ -440,6 +541,21 @@ sealed class Options
                 case "--config":
                     if (i + 1 >= args.Length) throw new ArgumentException("--config needs a file path after it.");
                     options.ConfigPath = args[++i];
+                    break;
+                case "--only":
+                    if (i + 1 >= args.Length) throw new ArgumentException("--only needs a list after it, e.g. --only languages");
+                    foreach (string target in args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    {
+                        string normalized = target.Equals("languages", StringComparison.OrdinalIgnoreCase)
+                            ? "languages"
+                            : target.EndsWith(".swz", StringComparison.OrdinalIgnoreCase) ? target : target + ".swz";
+
+                        if (normalized != "languages" && !Install.ArchiveNames.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+                            throw new ArgumentException(
+                                $"'{target}' is not something that can be patched. Use 'languages' or one of: {string.Join(", ", Install.ArchiveNames)}");
+
+                        options.Only.Add(normalized);
+                    }
                     break;
                 case "--key":
                     if (i + 1 >= args.Length) throw new ArgumentException("--key needs a number after it.");
@@ -478,6 +594,10 @@ sealed class Options
             --restore          Put the originals back from swz_backup/ and exit.
             --config <file>    Use a specific config file instead of the one next to the
                                program (or the built-in defaults).
+            --only <targets>   Patch only these, comma separated: languages, Init.swz,
+                               Game.swz, Dynamic.swz, Engine.swz. Use this to find out which
+                               files your game version tolerates being modified — see the
+                               "Online play" section of the README.
             --key <number>     Use this archive key instead of reading it from the .swf.
                                Only needed if key detection ever fails after a patch.
             --no-pause         Don't wait for Enter at the end. For scripts.
