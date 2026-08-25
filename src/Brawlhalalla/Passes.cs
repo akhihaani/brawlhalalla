@@ -61,11 +61,17 @@ public sealed class RenameTable
     public string? ReplaceWholeWords(string value)
     {
         if (value.Length == 0) return null;
+        // NOT \b. A word boundary treats Chinese, Japanese and Korean characters as word
+        // characters, so "灰燼警衛Thor" (the Chinese label for Cinderguard Thor) has no boundary
+        // before "Thor" and would be silently skipped. Legend names are written in Latin script in
+        // every language, so the only thing that can turn one into a different word is an adjacent
+        // Latin letter or digit — Thorn, crossover, Lacrosse. Guard against exactly that.
+        const string notLatin = @"[A-Za-z0-9À-ɏ]";
         _wordPatterns ??=
         [
             .. _map.Values.Select(entry => (
                 Pattern: new System.Text.RegularExpressions.Regex(
-                    $@"\b{System.Text.RegularExpressions.Regex.Escape(entry.Original)}\b",
+                    $"(?<!{notLatin}){System.Text.RegularExpressions.Regex.Escape(entry.Original)}(?!{notLatin})",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase),
                 entry.Original,
                 entry.Replacement))

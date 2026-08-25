@@ -438,6 +438,44 @@ harness.Test("cosmetic names: a Legend's name is renamed inside skin and colour 
     Harness.AreEqual(2, report.CosmeticNamesRenamed, "exactly the two cosmetic labels were changed");
 });
 
+harness.Test("cosmetic names: renamed in Chinese labels, where there is no space before the name", () =>
+{
+    // Legend names stay in Latin script in every language, so a Chinese label reads
+    // "灰燼警衛Thor". A regex word boundary does not fire between 衛 and T — both count as word
+    // characters — which silently skipped every no-space CJK label.
+    Config config = new()
+    {
+        StripLegendLore = false,
+        LegendRenames = new() { ["Thor"] = "Tony", ["Munin"] = "Raven", ["Imugi"] = "Big Turtle" },
+    };
+
+    List<LanguageEntry> entries =
+    [
+        new() { Key = "CostumeType_AsgardianThor_DisplayName", Value = "灰燼警衛Thor" },
+        new() { Key = "CostumeType_DeathMunin_DisplayName", Value = "死亡存在 Munin" },
+        new() { Key = "ThorColorSchemeType_Black_DisplayName", Value = "Thor 黑色" },
+        new() { Key = "CostumeType_ExoImugi_DisplayName", Value = "外骨骼Imugi" },
+        // Latin traps must still be blocked.
+        new() { Key = "CostumeType_ThornQueen_DisplayName", Value = "Thorn Queen" },
+        new() { Key = "CostumeType_Hathor_DisplayName", Value = "Heart of Hathor Mirage" },
+    ];
+
+    Report report = new();
+    Passes.ApplyLanguage("language.7.bin", entries, config,
+        new RenameTable(config.LegendRenames, config.Advanced),
+        new RenameTable(config.MapRenames, config.Advanced), report);
+
+    string Value(string key) => entries.Single(e => e.Key == key).Value;
+
+    Harness.AreEqual("灰燼警衛Tony", Value("CostumeType_AsgardianThor_DisplayName"), "no space before the name");
+    Harness.AreEqual("死亡存在 Raven", Value("CostumeType_DeathMunin_DisplayName"), "space before the name");
+    Harness.AreEqual("Tony 黑色", Value("ThorColorSchemeType_Black_DisplayName"), "name first");
+    Harness.AreEqual("外骨骼Big Turtle", Value("CostumeType_ExoImugi_DisplayName"), "multi-word replacement");
+
+    Harness.AreEqual("Thorn Queen", Value("CostumeType_ThornQueen_DisplayName"), "Latin trap still blocked");
+    Harness.AreEqual("Heart of Hathor Mirage", Value("CostumeType_Hathor_DisplayName"), "Hathor is not Thor");
+});
+
 harness.Test("cosmetic names: shouted labels stay shouted, and the feature can be turned off", () =>
 {
     Config config = new()
