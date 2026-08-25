@@ -6,22 +6,27 @@ some Legends and maps. Everything else is left exactly as it was.
 It is cosmetic and client-side only. It changes no gameplay values, no hitboxes, nothing that could
 be an advantage. **Play in casual or custom matches, not Ranked.**
 
+**[⬇ Download the latest release](https://github.com/akhihaani/brawlhalalla/releases/latest)** —
+Windows, Mac and Linux. No installation required.
+
 ---
 
 ## For people who just want to run it
 
-1. Download the file for your computer:
+1. Go to the **[latest release](https://github.com/akhihaani/brawlhalalla/releases/latest)** and
+   download the file for your computer:
 
    | Your computer | File |
    |---|---|
-   | Windows | `Brawlhalalla-Windows.exe` |
-   | Mac (M1/M2/M3/M4) | `Brawlhalalla-Mac-AppleSilicon.command` |
-   | Mac (older, Intel) | `Brawlhalalla-Mac-Intel.command` |
-   | Linux | `Brawlhalalla-Linux` |
+   | Windows | `Brawlhalalla-Windows.zip` |
+   | Mac (M1/M2/M3/M4) | `Brawlhalalla-Mac-AppleSilicon.zip` |
+   | Mac (older, Intel) | `Brawlhalalla-Mac-Intel.zip` |
+   | Linux | `Brawlhalalla-Linux.zip` |
 
-2. **Close Brawlhalla** if it is running.
-3. Double-click the file. It finds your game, backs up the originals, makes the changes, and tells
-   you what it did. Press Enter to close the window.
+2. Unzip it. Inside is the program, plus `brawlhalalla-config.json` if you want to change the names.
+3. **Close Brawlhalla** if it is running.
+4. Double-click the program. It finds your game, backs up the originals, makes the changes, and
+   tells you what it did. Press Enter to close the window.
 
 If it cannot find your game, drag your Brawlhalla folder onto the program instead. In Steam:
 right-click Brawlhalla → Manage → Browse local files.
