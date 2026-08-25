@@ -462,6 +462,27 @@ harness.Test("backup: already-patched files are recognised, so they are never sa
     List<LanguageEntry> stock = Samples.LanguageEntries();
     Harness.IsTrue(!Passes.LooksAlreadyPatched(stock, config), "stock files are not mistaken for patched ones");
 
+    // Brawlhalla ships its own "Raven" text, so a replacement name appearing in stock content must
+    // not by itself look like our work — that false positive blocked a perfectly clean install.
+    Config withCollidingName = new()
+    {
+        StripLegendLore = false,
+        LegendRenames = new() { ["Munin"] = "Raven" },
+    };
+    List<LanguageEntry> stockWithRaven =
+    [
+        .. Samples.LanguageEntries(),
+        new LanguageEntry { Key = "CostumeType_RavenSkin_DisplayName", Value = "Raven" },
+        new LanguageEntry { Key = "StoreType_BirdBard_DisplayName", Value = "Munin" },
+    ];
+    Harness.IsTrue(!Passes.LooksAlreadyPatched(stockWithRaven, withCollidingName),
+        "a stock name that collides with a replacement is not mistaken for a patch");
+
+    // Once the original is actually gone and the replacement is in its place, it is patched.
+    stockWithRaven.Single(e => e.Key == "StoreType_BirdBard_DisplayName").Value = "Raven";
+    Harness.IsTrue(Passes.LooksAlreadyPatched(stockWithRaven, withCollidingName),
+        "original replaced by the new name is recognised as patched");
+
     Passes.ApplyLanguage("language.1.bin", stock, config,
         new RenameTable(config.LegendRenames, config.Advanced),
         new RenameTable(config.MapRenames, config.Advanced), new Report());

@@ -376,10 +376,21 @@ public static class Passes
             if (lore > 0 && emptied > lore / 2) return true;
         }
 
-        HashSet<string> replacements = new(
-            config.LegendRenames.Values.Concat(config.MapRenames.Values), StringComparer.OrdinalIgnoreCase);
+        // Falling back to the renames is delicate: a replacement name may already exist in stock
+        // text for unrelated reasons (Brawlhalla ships a "Raven" of its own), so the mere presence
+        // of one proves nothing. What does distinguish the two states is the ORIGINAL name — a
+        // stock install still has it, a patched one does not.
+        HashSet<string> values = new(entries.Select(e => e.Value.Trim()), StringComparer.OrdinalIgnoreCase);
 
-        return replacements.Count > 0 && entries.Any(e => replacements.Contains(e.Value.Trim()));
+        int originalsStillPresent = 0, replacedInPlace = 0;
+        foreach ((string from, string to) in config.LegendRenames.Concat(config.MapRenames))
+        {
+            bool hasOriginal = values.Contains(from);
+            if (hasOriginal) originalsStillPresent++;
+            else if (values.Contains(to)) replacedInPlace++;
+        }
+
+        return originalsStillPresent == 0 && replacedInPlace > 0;
     }
 
     private static string? LookupWithoutCounting(string value, RenameTable legends, RenameTable maps)
