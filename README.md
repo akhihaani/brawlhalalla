@@ -4,7 +4,12 @@ A small tool that edits **text** inside Brawlhalla's game files: it removes Lege
 some Legends and maps. Everything else is left exactly as it was.
 
 It is cosmetic and client-side only. It changes no gameplay values, no hitboxes, nothing that could
-be an advantage. **Play in casual or custom matches, not Ranked.**
+be an advantage.
+
+> **⚠ Online play does not work with the full patch.**
+> Brawlhalla validates its game files, and a fully patched install is rejected with an
+> "old version" message. See [Online play](#online-play) below — this is a real limitation,
+> not a bug that can be fixed.
 
 **[⬇ Download the latest release](https://github.com/akhihaani/brawlhalalla/releases/latest)** —
 Windows, Mac and Linux. No installation required.
@@ -92,6 +97,51 @@ program falls back to identical built-in defaults.
 
 ---
 
+## Online play
+
+**Confirmed by testing:** with the full patch applied, Brawlhalla reports "you are on an old
+version" and refuses online play. Verifying the game files through Steam restores online
+immediately; re-applying the full patch breaks it again. It reproduces every time.
+
+This is Brawlhalla doing its job. It is a lockstep fighting game — every player must simulate
+identical frames — so the client's data files have to match what the server expects. Modified
+archives fail that check.
+
+**This tool will not try to defeat that check.** No patching the validation out of the game, no
+faking the values it reports. That is circumventing anti-cheat and a good way to lose an account.
+
+### What might still work online
+
+The patch touches two very different kinds of file:
+
+| | Contains | Inside the validated archives? |
+|---|---|---|
+| `languages/language.N.bin` | **All Legend lore**, store/costume name text | No — separate files |
+| `Init.swz` / `Game.swz` | Map names, roster and bio names | Yes |
+
+The lore is not in the archives. Language files are display text and cannot affect the simulation,
+so they may not be validated at all. If so, lore removal — the main feature — could work online with
+no archive changes at all.
+
+`--only` exists to find out, by changing one thing at a time:
+
+```
+--only languages                    lore only, no archive touched
+--only languages,Init.swz           adds map names
+--only languages,Init.swz,Game.swz  adds roster names
+```
+
+Verify your game files through Steam first so you start clean, then run one, launch, and try online.
+The first one that breaks online tells you where the limit is. Use `--restore` between tests.
+
+If you find out where the line is, please open an issue and say so — it decides whether this is an
+offline-only tool or a mostly-online one.
+
+### Either way
+
+Modifying game files may breach Brawlhalla's terms of service regardless of whether it works.
+That risk is yours to weigh.
+
 ## Before the first run on a new game version (recommended)
 
 The risky part of a tool like this is not the text editing — it is re-encrypting the archives
@@ -118,6 +168,8 @@ Brawlhalalla [install-folder] [options]
   --dry-run          Apply and verify every edit in memory, write nothing.
   --verify-codec     Re-encrypt with no text changes, to prove the codec works (see above).
   --dump [folder]    Decrypt all four archives to a folder and exit.
+  --only <targets>   Patch only these, comma separated: languages, Init.swz, Game.swz,
+                     Dynamic.swz, Engine.swz. See "Online play" above.
   --restore          Put the originals back from swz_backup/ and exit.
   --config <file>    Use a specific config file.
   --key <number>     Supply the archive key manually instead of reading it from the .swf.
@@ -172,8 +224,16 @@ Tomb` (curly apostrophe), `Munin` matches a stored `Múnin`, and casing does not
 replacement is always written exactly as configured. Anything that does not match is reported as a
 loud `MISS` at the end, never passed over quietly.
 
-Backups are taken before the first write and **never overwritten**, so running the tool on
-already-patched files cannot destroy your originals.
+Backups are taken before the first write and never overwritten by a later run, so repeatedly running
+the tool cannot destroy your originals. Two cases get special handling, both learned the hard way:
+
+- **After a game update**, a backup holds files from the *previous* version. Restoring it would
+  genuinely downgrade the install. The tool compares the backed-up `BrawlhallaAir.swf` — which it
+  reads but never writes — against the installed one; a difference means the game was patched.
+  `--restore` then refuses and points at Steam's file verification, and a patch run retires the old
+  backup to `swz_backup-old-<timestamp>/` before taking a fresh one.
+- **If the files are already modified and no usable backup exists**, the tool refuses to run at all,
+  rather than saving the modified state as though it were the originals and leaving no way back.
 
 Only CSV files that look like localized string tables are edited. Any other CSV that happens to
 contain a matching cell is reported to you and left alone, so a data table that uses a legend name
