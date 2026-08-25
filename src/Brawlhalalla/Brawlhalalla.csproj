@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Brawlhalalla</AssemblyName>
+    <RootNamespace>Brawlhalalla</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Optimize>true</Optimize>
+    <!-- Roughly halves the download without trimming. Trimming is deliberately left off: the
+         config is deserialized reflectively, and a silently trimmed-away property would be a
+         much worse failure than a larger file. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\vendor\BrawlhallaSwz\BrawlhallaSwz\BrawlhallaSwz.csproj" />
+    <ProjectReference Include="..\..\vendor\AbcDisassembler\AbcDisassembler\AbcDisassembler.csproj" />
+    <ProjectReference Include="..\..\vendor\AbcDisassembler\AbcDisassembler.Swf\AbcDisassembler.Swf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\brawlhalalla-config.json" LogicalName="brawlhalalla-config.json" />
+  </ItemGroup>
+
+</Project>
