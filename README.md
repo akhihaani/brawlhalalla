@@ -88,6 +88,11 @@ still works normally.
 Map name variants are included too, so `Demon Island CTF` becomes `Damon's Island CTF` rather than
 being left half-renamed.
 
+Legends are also renamed inside the ~2,100 cosmetic labels named after them — `Thor Winter Holiday`
+becomes `Tony Winter Holiday`, in every language. Matching is on whole words only, so Brawlhalla's
+`Thorn Queen`, `Repeating Crossbows`, `Lacrosse Check` and `Star-Crossed Nightmare` are left alone.
+Turn it off with `advanced.renameInCosmeticNames`.
+
 Names follow the casing the game already uses. Brawlhalla stores a Legend's name twice — shouted on
 the roster (`THOR`) and normal on the bio screen (`Thor`) — so `"Thor": "Tony"` becomes `TONY` on
 the roster and `Tony` on the bio screen from that one line. Set `advanced.matchStoredCasing` to
@@ -129,19 +134,17 @@ That gives you:
 |---|---|---|
 | Legend lore removed | ✅ all of it, 13 languages | ✅ |
 | Legend names in store / costume text | ✅ | ✅ |
+| Skin, colour and avatar labels renamed | ✅ ~2,100 of them | ✅ |
 | Legend names on the roster and bio screen | ❌ | ✅ |
 | Map names | ❌ | ✅ |
 | **Online play** | ✅ worked in testing | ❌ "old version" |
 
-So the main feature — removing every Legend's lore — works online. Only the roster/bio name fields
-and the map names need the archives, and those are the parts that break it.
+So the main feature — removing every Legend's lore — works online, and so does renaming the Legend
+almost everywhere else their name is shown. Only the roster/bio name field and the map names live
+inside the archives, and touching those is what breaks online.
 
-`--only` also accepts individual archives if you want to narrow down further:
-
-```
---only languages,Init.swz           adds map names
---only languages,Init.swz,Game.swz  adds roster names (same as the full patch)
-```
+**Every archive is checked.** `--only languages,Init.swz` (map names only) was tested and also
+breaks online, so there is no partial archive patch that survives. It is language files, or offline.
 
 This has been tested on one install and one game version. If online behaves differently for you,
 please open an issue and say which combination you used.
