@@ -412,6 +412,63 @@ harness.Test("config guard: a protected field cannot be used as a rename target"
     Harness.Throws(() => RunLegendPass(config), "targeting a protected internal ID");
 });
 
+harness.Test("backup: a backup from an older game build is detected and never restored over a new one", () =>
+{
+    string root = Path.Combine(Path.GetTempPath(), "brawlhalalla-backup-test-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        Directory.CreateDirectory(root);
+        foreach (string name in Install.ArchiveNames)
+            File.WriteAllText(Path.Combine(root, name), "archive " + name);
+        File.WriteAllText(Install.AirSwfPath(root), "game build 1");
+
+        BackupResult first = Install.Backup(root);
+        Harness.IsTrue(first.Created, "initial backup taken");
+        Harness.IsTrue(!Install.BackupIsStale(root), "fresh backup is not stale");
+
+        // Simulate Brawlhalla patching itself: the .swf changes, which the tool never does.
+        File.WriteAllText(Install.AirSwfPath(root), "game build 2 - patched by Steam");
+        Harness.IsTrue(Install.BackupIsStale(root), "backup detected as belonging to an older build");
+
+        // Restoring now would downgrade the install, so it must refuse.
+        Harness.Throws(() => Install.Restore(root), "restoring a stale backup");
+
+        // A patch run should retire the stale backup and take a fresh one.
+        BackupResult second = Install.Backup(root);
+        Harness.IsTrue(second.StaleBackupMovedTo is not null, "stale backup was archived aside");
+        Harness.IsTrue(Directory.Exists(second.StaleBackupMovedTo!), "archived copy still exists");
+        Harness.IsTrue(!Install.BackupIsStale(root), "replacement backup matches the current build");
+        Harness.AreEqual("game build 2 - patched by Steam",
+            File.ReadAllText(Path.Combine(root, Install.BackupDirName, Install.AirSwf)),
+            "fresh backup holds the current build");
+
+        List<string> restored = Install.Restore(root);
+        Harness.IsTrue(restored.Count > 0, "restore works again once the backup matches");
+    }
+    finally
+    {
+        if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+    }
+});
+
+harness.Test("backup: already-patched files are recognised, so they are never saved as 'originals'", () =>
+{
+    Config config = new()
+    {
+        StripLegendLore = true,
+        LegendRenames = new() { ["Thor"] = "Tony" },
+    };
+
+    List<LanguageEntry> stock = Samples.LanguageEntries();
+    Harness.IsTrue(!Passes.LooksAlreadyPatched(stock, config), "stock files are not mistaken for patched ones");
+
+    Passes.ApplyLanguage("language.1.bin", stock, config,
+        new RenameTable(config.LegendRenames, config.Advanced),
+        new RenameTable(config.MapRenames, config.Advanced), new Report());
+
+    Harness.IsTrue(Passes.LooksAlreadyPatched(stock, config), "patched files are recognised as already patched");
+});
+
 harness.Test("xml: entity encoding survives a rewrite", () =>
 {
     Harness.AreEqual("a & b", XmlEdit.Unescape("a &amp; b"), "unescape");

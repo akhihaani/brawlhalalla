@@ -116,6 +116,34 @@ public static class Install
 
     public static string AirSwfPath(string installDir) => Path.Combine(installDir, AirSwf);
 
+    /// <summary>
+    /// True when the backup was taken from a different build of the game than the one installed now.
+    ///
+    /// BrawlhallaAir.swf is backed up but never written to, so if the copy in the backup differs
+    /// from the installed one, Brawlhalla has been patched since the backup was taken. Restoring
+    /// then would put the previous version's files onto the current install — which looks like a
+    /// safety net right up until it breaks the game.
+    /// </summary>
+    public static bool BackupIsStale(string installDir)
+    {
+        string backedUpSwf = Path.Combine(installDir, BackupDirName, AirSwf);
+        string liveSwf = AirSwfPath(installDir);
+        if (!File.Exists(backedUpSwf) || !File.Exists(liveSwf)) return false;
+
+        return !FilesEqual(backedUpSwf, liveSwf);
+    }
+
+    private static bool FilesEqual(string a, string b)
+    {
+        FileInfo infoA = new(a), infoB = new(b);
+        if (infoA.Length != infoB.Length) return false;
+
+        using FileStream streamA = infoA.OpenRead();
+        using FileStream streamB = infoB.OpenRead();
+        return System.Security.Cryptography.SHA256.HashData(streamA)
+            .SequenceEqual(System.Security.Cryptography.SHA256.HashData(streamB));
+    }
+
     public static IEnumerable<string> ArchivePaths(string installDir) =>
         ArchiveNames.Select(n => Path.Combine(installDir, n));
 
@@ -136,6 +164,19 @@ public static class Install
             .. LanguageFile.FindFiles(installDir),
         ];
 
+        // A backup from a previous game build is not a safety net — it is a downgrade waiting to
+        // happen. Set it aside and take a fresh one of the newly patched (stock) files.
+        if (Directory.Exists(backupDir) && BackupIsStale(installDir))
+        {
+            string archived = Path.Combine(installDir,
+                $"{BackupDirName}-old-{DateTime.Now:yyyyMMdd-HHmmss}");
+            Directory.Move(backupDir, archived);
+            return new BackupResult(backupDir, Created: true, TakeFullBackup(backupDir, installDir, sources))
+            {
+                StaleBackupMovedTo = archived,
+            };
+        }
+
         if (Directory.Exists(backupDir))
         {
             // Fill only the gaps, never touching files already preserved. A backup taken from
@@ -155,6 +196,11 @@ public static class Install
             return new BackupResult(backupDir, Created: false, added);
         }
 
+        return new BackupResult(backupDir, Created: true, TakeFullBackup(backupDir, installDir, sources));
+    }
+
+    private static List<string> TakeFullBackup(string backupDir, string installDir, List<string> sources)
+    {
         Directory.CreateDirectory(backupDir);
         List<string> copied = [];
         foreach (string source in sources)
@@ -167,7 +213,7 @@ public static class Install
             File.Copy(source, target);
             copied.Add(relative);
         }
-        return new BackupResult(backupDir, Created: true, copied);
+        return copied;
     }
 
     /// <summary>Restores every file held in swz_backup/ back into the install directory.</summary>
@@ -176,6 +222,19 @@ public static class Install
         string backupDir = Path.Combine(installDir, BackupDirName);
         if (!Directory.Exists(backupDir))
             throw new InstallNotFoundException($"No backup found at {backupDir}. Use Steam's 'Verify integrity of game files' instead.");
+
+        if (BackupIsStale(installDir))
+        {
+            throw new StaleBackupException(
+                "REFUSING TO RESTORE — the backup is from an older version of Brawlhalla.\n\n" +
+                "  The game has been updated since this backup was taken, so these files belong to\n" +
+                "  the previous version. Restoring them would genuinely put you on an old version,\n" +
+                "  which is worse than whatever you are trying to fix.\n\n" +
+                "  Do this instead:\n" +
+                "    Steam -> right-click Brawlhalla -> Properties -> Installed Files\n" +
+                "         -> Verify integrity of game files\n\n" +
+                "  That re-downloads the correct files for the version you are actually on.");
+        }
 
         List<string> restored = [];
         foreach (string source in Directory.EnumerateFiles(backupDir, "*", SearchOption.AllDirectories))
@@ -191,9 +250,18 @@ public static class Install
     }
 }
 
-public sealed record BackupResult(string Directory, bool Created, List<string> FilesAdded);
+public sealed record BackupResult(string Directory, bool Created, List<string> FilesAdded)
+{
+    /// <summary>Set when a backup from an older game build was archived aside and replaced.</summary>
+    public string? StaleBackupMovedTo { get; init; }
+}
 
 public sealed class InstallNotFoundException : Exception
 {
     public InstallNotFoundException(string message) : base(message) { }
+}
+
+public sealed class StaleBackupException : Exception
+{
+    public StaleBackupException(string message) : base(message) { }
 }

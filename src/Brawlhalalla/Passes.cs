@@ -352,6 +352,36 @@ public static class Passes
         return changed;
     }
 
+    /// <summary>
+    /// Whether these language entries already carry our edits — lore emptied, or a configured
+    /// replacement name already in place. Used to avoid ever saving a patched install as if it
+    /// were the pristine originals.
+    /// </summary>
+    public static bool LooksAlreadyPatched(List<LanguageEntry> entries, Config config)
+    {
+        if (config.StripLegendLore)
+        {
+            System.Text.RegularExpressions.Regex loreKeys = new(config.Advanced.LoreKeyPattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            int lore = 0, emptied = 0;
+            foreach (LanguageEntry entry in entries)
+            {
+                if (!loreKeys.IsMatch(entry.Key)) continue;
+                lore++;
+                if (entry.Value.Length == 0) emptied++;
+            }
+
+            // Stock files carry lore in essentially all of these; a stripped install has none.
+            if (lore > 0 && emptied > lore / 2) return true;
+        }
+
+        HashSet<string> replacements = new(
+            config.LegendRenames.Values.Concat(config.MapRenames.Values), StringComparer.OrdinalIgnoreCase);
+
+        return replacements.Count > 0 && entries.Any(e => replacements.Contains(e.Value.Trim()));
+    }
+
     private static string? LookupWithoutCounting(string value, RenameTable legends, RenameTable maps)
     {
         string normalized = legends.Normalize(value);
