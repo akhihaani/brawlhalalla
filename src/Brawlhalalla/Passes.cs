@@ -11,6 +11,7 @@ public sealed class Report
     public int LegendsSeen;
     public int LoreFieldsCleared;
     public int LoreFieldsPresent;
+    public int CosmeticNamesRenamed;
     public readonly List<AuditEntry> Audit = [];
     public readonly List<string> Warnings = [];
     public readonly List<string> Observations = [];
@@ -49,6 +50,49 @@ public sealed class RenameTable
             AlreadyApplied[from] = 0;
         }
     }
+
+    /// <summary>
+    /// Replaces the configured names where they appear as whole words inside a longer label —
+    /// "Thor Winter Holiday" becomes "Tony Winter Holiday". Returns null if nothing matched.
+    ///
+    /// Word boundaries are what make this safe: Brawlhalla has a Thorn Queen, a Dark Thorn Cleaver
+    /// and plenty of crossovers, and none of them are Thor or Cross.
+    /// </summary>
+    public string? ReplaceWholeWords(string value)
+    {
+        if (value.Length == 0) return null;
+        _wordPatterns ??=
+        [
+            .. _map.Values.Select(entry => (
+                Pattern: new System.Text.RegularExpressions.Regex(
+                    $@"\b{System.Text.RegularExpressions.Regex.Escape(entry.Original)}\b",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+                entry.Original,
+                entry.Replacement))
+        ];
+
+        string result = value;
+        bool changed = false;
+
+        foreach ((System.Text.RegularExpressions.Regex pattern, string original, string replacement) in _wordPatterns)
+        {
+            result = pattern.Replace(result, match =>
+            {
+                changed = true;
+                WordHits[original] = WordHits.GetValueOrDefault(original) + 1;
+                return _advanced.MatchStoredCasing && IsAllUpperCase(match.Value)
+                    ? replacement.ToUpperInvariant()
+                    : replacement;
+            });
+        }
+
+        return changed ? result : null;
+    }
+
+    private List<(System.Text.RegularExpressions.Regex Pattern, string Original, string Replacement)>? _wordPatterns;
+
+    /// <summary>How often each name was replaced inside a longer label.</summary>
+    public readonly Dictionary<string, int> WordHits = [];
 
     /// <summary>Records a value that already equals its configured replacement. Returns true if so.</summary>
     public bool NoteAlreadyApplied(string value)
@@ -317,8 +361,11 @@ public static class Passes
         System.Text.RegularExpressions.Regex loreKeys = new(adv.LoreKeyPattern,
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+        System.Text.RegularExpressions.Regex cosmeticKeys = new(adv.CosmeticNameKeyPattern,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
         bool changed = false;
-        int cleared = 0, present = 0;
+        int cleared = 0, present = 0, cosmetic = 0;
 
         foreach (LanguageEntry entry in entries)
         {
@@ -339,6 +386,21 @@ public static class Passes
             if (renamed is null)
             {
                 if (!legends.NoteAlreadyApplied(entry.Value)) maps.NoteAlreadyApplied(entry.Value);
+
+                // Not the whole label, but the name may still sit inside one — the skins, colours
+                // and avatars named after a Legend. Restricted to display-name keys, because those
+                // are short labels; running this over prose would rewrite sentences.
+                if (adv.RenameInCosmeticNames && cosmeticKeys.IsMatch(entry.Key))
+                {
+                    string? relabelled = legends.ReplaceWholeWords(entry.Value);
+                    if (relabelled is not null)
+                    {
+                        report.Change(fileName, $"{entry.Key}: \"{entry.Value}\" -> \"{relabelled}\"");
+                        entry.Value = relabelled;
+                        changed = true;
+                        cosmetic++;
+                    }
+                }
                 continue;
             }
 
@@ -349,6 +411,7 @@ public static class Passes
 
         report.LoreFieldsPresent += present;
         report.LoreFieldsCleared += cleared;
+        report.CosmeticNamesRenamed += cosmetic;
         if (cleared > 0)
             report.Change(fileName, $"emptied {cleared} lore entr{(cleared == 1 ? "y" : "ies")}");
 

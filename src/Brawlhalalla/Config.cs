@@ -123,6 +123,20 @@ public sealed class AdvancedConfig
         "AssetName", "FileName", "BGMusic", "ThumbnailPNGFile",
     ];
 
+    /// <summary>
+    /// Also rename a Legend where their name appears inside a longer cosmetic label — skins,
+    /// colour schemes, avatars, podiums ("Thor Winter Holiday" -> "Tony Winter Holiday"). These all
+    /// live in the language files, so this works in the online-safe `--only languages` mode.
+    /// Matching is on whole words only, so Thorn Queen and Infernal Crossfire are left alone.
+    /// </summary>
+    public bool RenameInCosmeticNames { get; set; } = true;
+
+    /// <summary>
+    /// Which language keys are treated as short labels safe for word-level renaming. Deliberately
+    /// display names only — running this over descriptions would rewrite words inside sentences.
+    /// </summary>
+    public string CosmeticNameKeyPattern { get; set; } = "_DisplayName$";
+
     public bool RenameInStringTables { get; set; } = true;
 
     /// <summary>

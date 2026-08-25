@@ -53,6 +53,10 @@
       "ThumbnailPNGFile"
     ],
 
+    "renameInCosmeticNames": true,
+
+    "cosmeticNameKeyPattern": "_DisplayName$",
+
     "renameInStringTables": true,
 
     "stringTableGlobs": [ "strings*.csv", "language*.csv", "*Strings*.csv" ],

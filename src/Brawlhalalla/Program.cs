@@ -401,6 +401,9 @@ static class Cli
             report.Warn("No lore fields were found at all — they may be named differently in this game version. Run with --dump and check advanced.loreFields.");
         }
 
+        if (report.CosmeticNamesRenamed > 0)
+            Console.WriteLine($"  Cosmetic names:  {report.CosmeticNamesRenamed} skin/colour/avatar labels renamed too");
+
         Console.WriteLine();
         Console.WriteLine("  Legend renames:");
         ReportRenames(legends, report, "legend", legendNamesPartlyOutOfScope, "Game.swz was not patched (--only)");

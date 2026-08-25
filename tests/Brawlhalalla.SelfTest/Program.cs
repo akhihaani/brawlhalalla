@@ -396,6 +396,70 @@ harness.Test("language file: legend names in UI text are renamed, lookup keys ne
     Harness.IsTrue(entries.All(e => !e.Key.Contains("Tony")), "keys are never rewritten, only values");
 });
 
+harness.Test("cosmetic names: a Legend's name is renamed inside skin and colour labels", () =>
+{
+    Config config = new()
+    {
+        StripLegendLore = false,
+        LegendRenames = new() { ["Thor"] = "Tony", ["Cross"] = "Hologram Man" },
+    };
+
+    List<LanguageEntry> entries =
+    [
+        new() { Key = "ThorColorSchemeType_Holiday_DisplayName", Value = "Thor Winter Holiday" },
+        new() { Key = "CostumeType_AsgardianThor_DisplayName", Value = "Cinderguard Thor" },
+        new() { Key = "AvatarType_DoodleThor_DisplayName", Value = "Thoodle" },
+        new() { Key = "StoreType_Thor_DisplayName", Value = "Thor" },
+        // The traps: none of these are Thor or Cross.
+        new() { Key = "CostumeType_ThornQueen_DisplayName", Value = "Thorn Queen" },
+        new() { Key = "WeaponSkinType_GreatswordThornQueen_DisplayName", Value = "Dark Thorn Cleaver" },
+        new() { Key = "CostumeType_Crossfire_DisplayName", Value = "Infernal Crossfire" },
+        // Prose must not be touched, even when it mentions a Legend.
+        new() { Key = "StoreType_Thor_Description", Value = "Thor Odinson. God of Thunder." },
+    ];
+
+    Report report = new();
+    Passes.ApplyLanguage("language.1.bin", entries, config,
+        new RenameTable(config.LegendRenames, config.Advanced),
+        new RenameTable(config.MapRenames, config.Advanced), report);
+
+    string Value(string key) => entries.Single(e => e.Key == key).Value;
+
+    Harness.AreEqual("Tony Winter Holiday", Value("ThorColorSchemeType_Holiday_DisplayName"), "leading name renamed");
+    Harness.AreEqual("Cinderguard Tony", Value("CostumeType_AsgardianThor_DisplayName"), "trailing name renamed");
+    Harness.AreEqual("Tony", Value("StoreType_Thor_DisplayName"), "whole-value rename still works");
+
+    Harness.AreEqual("Thoodle", Value("AvatarType_DoodleThor_DisplayName"), "name fused into another word untouched");
+    Harness.AreEqual("Thorn Queen", Value("CostumeType_ThornQueen_DisplayName"), "Thorn Queen is not Thor");
+    Harness.AreEqual("Dark Thorn Cleaver", Value("WeaponSkinType_GreatswordThornQueen_DisplayName"), "Thorn is not Thor");
+    Harness.AreEqual("Infernal Crossfire", Value("CostumeType_Crossfire_DisplayName"), "Crossfire is not Cross");
+    Harness.AreEqual("Thor Odinson. God of Thunder.", Value("StoreType_Thor_Description"), "prose left alone");
+
+    Harness.AreEqual(2, report.CosmeticNamesRenamed, "exactly the two cosmetic labels were changed");
+});
+
+harness.Test("cosmetic names: shouted labels stay shouted, and the feature can be turned off", () =>
+{
+    Config config = new()
+    {
+        StripLegendLore = false,
+        LegendRenames = new() { ["Thor"] = "Tony" },
+    };
+
+    List<LanguageEntry> shouted = [new() { Key = "CostumeType_X_DisplayName", Value = "THOR SKYFORGED" }];
+    Passes.ApplyLanguage("language.1.bin", shouted, config,
+        new RenameTable(config.LegendRenames, config.Advanced),
+        new RenameTable(config.MapRenames, config.Advanced), new Report());
+    Harness.AreEqual("TONY SKYFORGED", shouted[0].Value, "casing followed inside a label");
+
+    config.Advanced.RenameInCosmeticNames = false;
+    List<LanguageEntry> off = [new() { Key = "CostumeType_X_DisplayName", Value = "Thor Winter Holiday" }];
+    Passes.ApplyLanguage("language.1.bin", off, config,
+        new RenameTable(config.LegendRenames, config.Advanced),
+        new RenameTable(config.MapRenames, config.Advanced), new Report());
+    Harness.AreEqual("Thor Winter Holiday", off[0].Value, "left alone when disabled");
+});
+
 // ---------------------------------------------------------------------------
 // Safety rails.
 // ---------------------------------------------------------------------------
