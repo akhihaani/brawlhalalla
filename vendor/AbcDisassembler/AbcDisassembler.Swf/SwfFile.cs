@@ -1,0 +1,112 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Text;
+using AbcDisassembler.Swf.Tags;
+
+namespace AbcDisassembler.Swf;
+
+/// <summary>
+/// This SWF implementation is only intended for reading/writing ABC related tags.
+/// </summary>
+public class SwfFile
+{
+    public required SwfHeader Header { get; set; }
+    public required List<ITag> Tags { get; set; }
+
+    public static SwfFile Read(Stream stream)
+    {
+        (SwfHeader header, Stream decompressedStream) = ReadHeader(stream);
+        using BinaryReader reader = new(decompressedStream);
+
+        List<ITag> tags = [];
+        tags.Add(ITag.Read(reader));
+        if (tags[0].Type != TagType.FileAttributes)
+            throw new Exception($"First tag should be FileAttributes. Found {tags[0].Type}");
+
+        while (tags[^1].Type != TagType.End)
+            tags.Add(ITag.Read(reader));
+        
+        return new()
+        {
+            Header = header,
+            Tags = tags,
+        };
+    }
+
+    public static IEnumerable<ITag> ReadTags(Stream stream)
+    {
+        (_, Stream decompressedStream) = ReadHeader(stream);
+        using BinaryReader reader = new(decompressedStream);
+
+        ITag tag = ITag.Read(reader);
+        if (tag.Type != TagType.FileAttributes)
+            throw new Exception($"First tag should be FileAttributes. Found {tag.Type}");
+
+        yield return tag;
+
+        while (tag.Type != TagType.End)
+        {
+            tag = ITag.Read(reader);
+            yield return tag;
+        }
+    }
+
+    private static (SwfHeader, Stream) ReadHeader(Stream stream)
+    {
+        CompressionType compression = (CompressionType)stream.ReadByte();
+        Span<byte> buf = [(byte)stream.ReadByte(), (byte)stream.ReadByte()];
+        if (buf[0] != 'W' || buf[1] != 'S')
+            throw new Exception("Invalid compression header");
+
+        using BinaryReader reader = new(stream, Encoding.Default, leaveOpen: true);
+        byte version = reader.ReadByte();
+        uint fileLength = reader.ReadUInt32();
+
+        // TODO
+        if (compression != CompressionType.Zlib)
+            throw new Exception("Only zlib compression is currently supported");
+
+        ZLibStream decompressedStream = new(stream, CompressionMode.Decompress);
+        using BinaryReader decompressedReader = new(decompressedStream, Encoding.Default, leaveOpen: true);
+
+        byte[] rectBytes = ReadRectBytes(decompressedStream);
+        ushort frameRate = decompressedReader.ReadUInt16();
+        ushort frameCount = decompressedReader.ReadUInt16();
+
+        SwfHeader header = new()
+        {
+            Version = version,
+            FileLength = fileLength,
+            FrameSizeBytes = rectBytes,
+            FrameRate = frameRate,
+            FrameCount = frameCount
+        };
+
+        return (header, decompressedStream);
+    }
+
+    private static byte[] DecompressZlib(Stream input)
+    {
+        using MemoryStream outputStream = new();
+        using (ZLibStream zlibStream = new(input, CompressionMode.Decompress))
+        {
+            zlibStream.CopyTo(outputStream);
+        }
+
+        return outputStream.ToArray();
+    }
+
+    private static byte[] ReadRectBytes(Stream stream)
+    {
+        byte b = (byte)stream.ReadByte();
+        uint nBits = (uint)b >> 3;
+        uint nBytes = (5 + 4 * nBits + 7) / 8;
+        byte[] buffer = new byte[nBytes];
+        buffer[0] = b;
+        stream.ReadExactly(buffer, 1, (int)nBytes - 1);
+
+        return buffer;
+    }
+}
