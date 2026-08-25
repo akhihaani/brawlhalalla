@@ -64,8 +64,9 @@ it is safe to run as many times as you like, and it will tell you what was alrea
 ### If something goes wrong
 
 Run it again with `--restore` and it puts the original files back from the `swz_backup` folder it
-made inside your game directory (18 files: the four archives, the `.swf`, and all 13 language files). Failing that, Steam → right-click Brawlhalla → Properties →
-Installed Files → **Verify integrity of game files**.
+made inside your game directory (24 files: the four archives, the `.swf`, all 13 language files and
+the 6 fonts). Failing that, Steam → right-click Brawlhalla → Properties → Installed Files →
+**Verify integrity of game files**.
 
 ---
 
@@ -137,6 +138,7 @@ That gives you:
 | Skin, colour and avatar labels renamed | ✅ ~2,100 of them | ✅ |
 | Legend names on the roster and bio screen | ❌ | ✅ |
 | Map names | ❌ | ✅ |
+| Names made unspellable via `--strip-glyphs` | ✅ (at a cost) | ✅ |
 | **Online play** | ✅ worked in testing | ❌ "old version" |
 
 So the main feature — removing every Legend's lore — works online, and so does renaming the Legend
@@ -153,6 +155,47 @@ please open an issue and say which combination you used.
 
 Modifying game files may breach Brawlhalla's terms of service regardless of whether it works.
 That risk is yours to weigh.
+
+## Blanking letters (`--strip-glyphs`)
+
+The roster name and map names live inside the validated archives, so they cannot be renamed online.
+The one thing that *can* be changed online is the **fonts** — they sit in `fontData/` outside the
+archives and are not validated.
+
+```
+Brawlhalalla --only languages --strip-glyphs I,O
+```
+
+This blanks the letters `I` and `O` in the game's embedded fonts, so those names can no longer be
+spelled: `ORION` shows as `RN`, `THOR` as `THR`, `LOKI` as `LK`.
+
+**Read this before using it.** A font is global. Those letters disappear from *everything* drawn in
+that font:
+
+| | |
+|---|---|
+| `Options` | `ptns` |
+| `Inventory` | `nventry` |
+| `SPECIAL OFFER!` | `SPECAL FFER!` |
+
+Roughly 17% of the game's interface text is affected if you blank uppercase `I` and `O`, and about
+82% if you blank both cases. Menus stay navigable — the buttons are still in the same places — but
+they read badly.
+
+It is also not a clean removal. `THR` and `CRSS` are still recognisable, and map names stored in
+Title Case (`Western Air Temple`, `Lich's Tomb`) contain no capital `I` or `O`, so they are
+unaffected. `ORION` is the reason common letters are unavoidable: its letters are `O`, `R`, `I`, `N`
+— there is no rare letter that breaks it.
+
+To limit the damage, restrict it to the font used by the roster name:
+
+```json
+"advanced": { "glyphStripFonts": [ "BMG Bespoke Sans Extrabold" ] }
+```
+
+That leaves body text, descriptions and chat readable, affecting only bold and heading text.
+
+`--restore` puts the original fonts back; they are included in the backup.
 
 ## Before the first run on a new game version (recommended)
 
@@ -182,6 +225,9 @@ Brawlhalalla [install-folder] [options]
   --dump [folder]    Decrypt all four archives to a folder and exit.
   --only <targets>   Patch only these, comma separated: languages, Init.swz, Game.swz,
                      Dynamic.swz, Engine.swz. See "Online play" above.
+  --strip-glyphs <letters>
+                     Blank these letters in the game's fonts, e.g. I,O. Works online but
+                     affects menus too - see "Blanking letters".
   --restore          Put the originals back from swz_backup/ and exit.
   --config <file>    Use a specific config file.
   --key <number>     Supply the archive key manually instead of reading it from the .swf.
