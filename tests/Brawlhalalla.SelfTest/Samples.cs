@@ -113,6 +113,72 @@ public static class Samples
         new() { Key = "UI_HelpScreen_FindAGuild_Header", Value = "Guild Help" },
     ];
 
+    /// <summary>
+    /// Builds a minimal but structurally real SWF holding one DefineFont3 with the given
+    /// characters, so the font editor can be tested without shipping a copy of a game font.
+    /// Each glyph gets a distinctly sized dummy shape so changes are easy to detect.
+    /// </summary>
+    public static byte[] BuildFontSwf(string fontName, string characters)
+    {
+        char[] sorted = [.. characters.Order()];
+
+        List<byte[]> shapes = [];
+        for (int i = 0; i < sorted.Length; i++)
+        {
+            // A believable non-empty shape: fill/line bits byte, some filler, then a zero byte.
+            byte[] shape = new byte[4 + i * 2];
+            shape[0] = 0x10;
+            for (int j = 1; j < shape.Length - 1; j++) shape[j] = (byte)(0x40 + j);
+            shapes.Add(shape);
+        }
+
+        using MemoryStream tag = new();
+        void U16(Stream s, int v) { s.WriteByte((byte)(v & 0xFF)); s.WriteByte((byte)(v >> 8)); }
+        void U32(Stream s, uint v)
+        {
+            s.WriteByte((byte)(v & 0xFF)); s.WriteByte((byte)((v >> 8) & 0xFF));
+            s.WriteByte((byte)((v >> 16) & 0xFF)); s.WriteByte((byte)((v >> 24) & 0xFF));
+        }
+
+        U16(tag, 1);                                    // FontID
+        tag.WriteByte(0x80 | 0x08 | 0x04);              // HasLayout | WideOffsets | WideCodes
+        tag.WriteByte(0);                               // LanguageCode
+        byte[] name = System.Text.Encoding.UTF8.GetBytes(fontName + "\0");
+        tag.WriteByte((byte)name.Length);
+        tag.Write(name);
+        U16(tag, sorted.Length);                        // NumGlyphs
+
+        uint running = (uint)((sorted.Length + 1) * 4); // offsets are relative to the table start
+        foreach (byte[] shape in shapes) { U32(tag, running); running += (uint)shape.Length; }
+        U32(tag, running);                              // CodeTableOffset
+        foreach (byte[] shape in shapes) tag.Write(shape);
+        foreach (char c in sorted) U16(tag, c);         // CodeTable
+
+        U16(tag, 800); U16(tag, 200); U16(tag, 0);      // ascent, descent, leading
+        foreach (char _ in sorted) U16(tag, 500);       // advance table
+        foreach (char _ in sorted) tag.WriteByte(0x00); // bounds: one empty RECT each
+        U16(tag, 0);                                    // kerning count
+
+        byte[] tagData = tag.ToArray();
+
+        using MemoryStream swf = new();
+        swf.Write("FWS"u8);
+        swf.WriteByte(10);
+        U32(swf, 0);                                    // file length, patched below
+        swf.WriteByte(0x00);                            // RECT with zero bits
+        U16(swf, 0x0100);                               // frame rate
+        U16(swf, 1);                                    // frame count
+
+        U16(swf, (75 << 6) | 0x3F);                     // DefineFont3, long form
+        U32(swf, (uint)tagData.Length);
+        swf.Write(tagData);
+        U16(swf, 0);                                    // End tag
+
+        byte[] bytes = swf.ToArray();
+        BitConverter.TryWriteBytes(bytes.AsSpan(4, 4), (uint)bytes.Length);
+        return bytes;
+    }
+
     /// <summary>Not a string table: cells here are code references, and must never be rewritten.</summary>
     public const string BotBehaviorCsv =
         "BotBehavior\r\n" +

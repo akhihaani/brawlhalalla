@@ -499,6 +499,74 @@ harness.Test("cosmetic names: shouted labels stay shouted, and the feature can b
 });
 
 // ---------------------------------------------------------------------------
+// Font editing — blanking letters so a name cannot be spelled.
+// ---------------------------------------------------------------------------
+
+harness.Test("fonts: blanks exactly the requested letters and leaves the rest byte-identical", () =>
+{
+    byte[] original = Samples.BuildFontSwf("BMG Bespoke Sans Extrabold", "AEIORT");
+    (byte[]? edited, List<FontStripResult> stripped) = FontFile.Strip(original, new HashSet<char> { 'I', 'O' }, new HashSet<string>());
+
+    Harness.IsTrue(edited is not null, "the font was edited");
+    Harness.AreEqual(1, stripped.Count, "one font in the file was affected");
+    Harness.AreEqual(2, stripped[0].GlyphsBlanked, "two glyphs blanked");
+
+    List<FontFile.FontShape> before = FontFile.Inspect(original);
+    List<FontFile.FontShape> after = FontFile.Inspect(edited!);
+
+    Harness.AreEqual(before[0].GlyphCount, after[0].GlyphCount, "glyph count unchanged");
+    Harness.AreEqual("BMG Bespoke Sans Extrabold", after[0].Name, "font name unchanged");
+
+    foreach (char c in "AERT")
+        Harness.AreEqual(before[0].ShapeLengths[c], after[0].ShapeLengths[c], $"'{c}' untouched");
+
+    Harness.IsTrue(after[0].ShapeLengths['I'] <= 2, "'I' emptied");
+    Harness.IsTrue(after[0].ShapeLengths['O'] <= 2, "'O' emptied");
+
+    // The strongest check: the verifier itself must accept this edit.
+    FontFile.VerifyStrip(original, edited!, new HashSet<char> { 'I', 'O' }, new HashSet<string>());
+});
+
+harness.Test("fonts: only the named fonts are touched", () =>
+{
+    byte[] original = Samples.BuildFontSwf("BMG Author Medium", "AEIORT");
+
+    (byte[]? skipped, List<FontStripResult> none) =
+        FontFile.Strip(original, new HashSet<char> { 'I' }, new HashSet<string> { "BMG Bespoke Sans Extrabold" });
+    Harness.IsTrue(skipped is null, "a font not on the list is left alone");
+    Harness.AreEqual(0, none.Count, "nothing reported");
+
+    (byte[]? hit, List<FontStripResult> one) =
+        FontFile.Strip(original, new HashSet<char> { 'I' }, new HashSet<string> { "BMG Author Medium" });
+    Harness.IsTrue(hit is not null, "a font on the list is edited");
+    Harness.AreEqual(1, one.Count, "reported");
+});
+
+harness.Test("fonts: a letter the font does not have is a no-op", () =>
+{
+    byte[] original = Samples.BuildFontSwf("BMG Author Bold", "AEORT");
+    (byte[]? edited, List<FontStripResult> stripped) = FontFile.Strip(original, new HashSet<char> { 'Z' }, new HashSet<string>());
+    Harness.IsTrue(edited is null, "nothing to do");
+    Harness.AreEqual(0, stripped.Count, "nothing reported");
+});
+
+harness.Test("fonts: the verifier rejects an edit that damaged an untargeted letter", () =>
+{
+    byte[] original = Samples.BuildFontSwf("BMG Author Bold", "AEIORT");
+    byte[] edited = FontFile.Strip(original, new HashSet<char> { 'I', 'O' }, new HashSet<string>()).Bytes!;
+
+    // Claim we only meant to blank 'I'. 'O' is now blank too, so verification must fail.
+    Harness.Throws(() => FontFile.VerifyStrip(original, edited, new HashSet<char> { 'I' }, new HashSet<string>()),
+        "verifying against the wrong set of letters");
+});
+
+harness.Test("fonts: corrupt input is rejected rather than half-written", () =>
+{
+    Harness.Throws(() => FontFile.Inspect([1, 2, 3]), "inspecting junk");
+    Harness.Throws(() => FontFile.Strip([1, 2, 3], new HashSet<char> { 'I' }, new HashSet<string>()), "stripping junk");
+});
+
+// ---------------------------------------------------------------------------
 // Safety rails.
 // ---------------------------------------------------------------------------
 

@@ -12,6 +12,7 @@ public sealed class Report
     public int LoreFieldsCleared;
     public int LoreFieldsPresent;
     public int CosmeticNamesRenamed;
+    public int GlyphsBlanked;
     public readonly List<AuditEntry> Audit = [];
     public readonly List<string> Warnings = [];
     public readonly List<string> Observations = [];

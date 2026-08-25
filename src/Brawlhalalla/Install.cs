@@ -162,6 +162,7 @@ public static class Install
             .. ArchivePaths(installDir),
             AirSwfPath(installDir),
             .. LanguageFile.FindFiles(installDir),
+            .. FontFile.FindFiles(installDir),
         ];
 
         // A backup from a previous game build is not a safety net — it is a downgrade waiting to

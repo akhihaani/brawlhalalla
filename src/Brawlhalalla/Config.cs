@@ -161,4 +161,11 @@ public sealed class AdvancedConfig
     /// look right in both. Turn off to write the replacement exactly as configured everywhere.
     /// </summary>
     public bool MatchStoredCasing { get; set; } = true;
+
+    /// <summary>
+    /// Which embedded fonts --strip-glyphs may edit. Empty means all of them. The Legend roster
+    /// name is drawn in "BMG Bespoke Sans Extrabold", so narrowing to that limits the damage to
+    /// bold and heading text, leaving body text and descriptions readable.
+    /// </summary>
+    public List<string> GlyphStripFonts { get; set; } = [];
 }

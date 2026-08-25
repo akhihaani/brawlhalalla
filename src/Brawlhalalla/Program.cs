@@ -246,6 +246,48 @@ static class Cli
             }
         }
 
+        // Blank letters in the embedded fonts. Deliberately last: it is the only pass that degrades
+        // text the user did not ask to change, so it only runs when explicitly requested.
+        if (options.StripGlyphs.Count > 0)
+        {
+            HashSet<string> onlyFonts = new(config.Advanced.GlyphStripFonts, StringComparer.Ordinal);
+            List<string> fontFiles = [.. FontFile.FindFiles(install)];
+
+            if (fontFiles.Count == 0)
+                report.Warn($"No {FontFile.DirectoryName}/{FontFile.SearchPattern} files found — no letters were blanked.");
+
+            foreach (string fontPath in fontFiles)
+            {
+                string name = Path.GetFileName(fontPath);
+                byte[] original = File.ReadAllBytes(fontPath);
+                (byte[]? edited, List<FontStripResult> stripped) = FontFile.Strip(original, options.StripGlyphs, onlyFonts);
+
+                if (edited is null)
+                {
+                    Console.WriteLine($"  {name,-28} no matching letters");
+                    continue;
+                }
+
+                FontFile.VerifyStrip(original, edited, options.StripGlyphs, onlyFonts);
+                archivesChanged++;
+
+                string what = string.Join(", ", stripped.Select(s => $"{s.FontName} ({string.Join("", s.Characters)})"));
+                if (options.DryRun)
+                    Console.WriteLine($"  {name,-28} verified, not written: {what}");
+                else
+                {
+                    FontFile.Write(fontPath, edited);
+                    Console.WriteLine($"  {name,-28} written: {what}");
+                }
+                report.Change(name, $"blanked {string.Join("", options.StripGlyphs.Order())} in {stripped.Count} font(s)");
+                report.GlyphsBlanked += stripped.Sum(s => s.GlyphsBlanked);
+            }
+
+            report.Warn(
+                $"Letters {string.Join(", ", options.StripGlyphs.Order())} are now blank EVERYWHERE those fonts are used, " +
+                "not just in Legend and map names — menus and buttons are affected too. Use --restore to undo.");
+        }
+
         Summary(report, legends, maps, config, archivesChanged, options);
     }
 
@@ -401,6 +443,9 @@ static class Cli
             report.Warn("No lore fields were found at all — they may be named differently in this game version. Run with --dump and check advanced.loreFields.");
         }
 
+        if (report.GlyphsBlanked > 0)
+            Console.WriteLine($"  Letters blanked: {report.GlyphsBlanked} glyph(s) across the game's fonts");
+
         if (report.CosmeticNamesRenamed > 0)
             Console.WriteLine($"  Cosmetic names:  {report.CosmeticNamesRenamed} skin/colour/avatar labels renamed too");
 
@@ -555,6 +600,9 @@ sealed class Options
     /// </summary>
     public readonly HashSet<string> Only = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Letters to blank in the embedded fonts. Off unless explicitly asked for.</summary>
+    public readonly HashSet<char> StripGlyphs = [];
+
     public bool Includes(string target) => Only.Count == 0 || Only.Contains(target);
 
     public static Options Parse(string[] args)
@@ -605,6 +653,15 @@ sealed class Options
                         options.Only.Add(normalized);
                     }
                     break;
+                case "--strip-glyphs":
+                    if (i + 1 >= args.Length) throw new ArgumentException("--strip-glyphs needs letters after it, e.g. --strip-glyphs I,O");
+                    foreach (string piece in args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    {
+                        if (piece.Length != 1)
+                            throw new ArgumentException($"'{piece}' is not a single letter. Use one letter per entry, e.g. --strip-glyphs I,O");
+                        options.StripGlyphs.Add(piece[0]);
+                    }
+                    break;
                 case "--key":
                     if (i + 1 >= args.Length) throw new ArgumentException("--key needs a number after it.");
                     if (!uint.TryParse(args[++i], out uint key))
@@ -642,6 +699,10 @@ sealed class Options
             --restore          Put the originals back from swz_backup/ and exit.
             --config <file>    Use a specific config file instead of the one next to the
                                program (or the built-in defaults).
+            --strip-glyphs <letters>
+                               Blank these letters in the game's fonts, e.g. I,O so that
+                               ORION cannot be spelled. Works online, but the letters vanish
+                               from menus and buttons too. Read the README first.
             --only <targets>   Patch only these, comma separated: languages, Init.swz,
                                Game.swz, Dynamic.swz, Engine.swz. Use this to find out which
                                files your game version tolerates being modified — see the
