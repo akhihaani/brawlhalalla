@@ -6,7 +6,7 @@
     "Loki": "Larry",
     "Artemis": "Aaminah",
     "Orion": "'Umar",
-    "Cross": "Man with Holograms",
+    "Cross": "Hologram Man",
     "Imugi": "Big Turtle",
     "Munin": "Raven"
   },
@@ -61,6 +61,8 @@
 
     "normalizeApostrophes": true,
 
-    "ignoreDiacritics": true
+    "ignoreDiacritics": true,
+
+    "matchStoredCasing": true
   }
 }

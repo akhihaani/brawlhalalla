@@ -66,7 +66,7 @@ Installed Files → **Verify integrity of game files**.
 | Loki | Larry | | Western Air Temple | Western Air Apartment |
 | Artemis | Aaminah | | Spirit Realm Showdown | Kung-Fu Panda Showdown |
 | Orion | 'Umar | | Lich's Tomb | Skeleton Tomb |
-| Cross | Man with Holograms | | | |
+| Cross | Hologram Man | | | |
 | Imugi | Big Turtle | | | |
 | Munin | Raven | | | |
 
@@ -76,6 +76,11 @@ still works normally.
 
 Map name variants are included too, so `Demon Island CTF` becomes `Damon's Island CTF` rather than
 being left half-renamed.
+
+Names follow the casing the game already uses. Brawlhalla stores a Legend's name twice — shouted on
+the roster (`THOR`) and normal on the bio screen (`Thor`) — so `"Thor": "Tony"` becomes `TONY` on
+the roster and `Tony` on the bio screen from that one line. Set `advanced.matchStoredCasing` to
+`false` if you would rather your spelling be used exactly as written everywhere.
 
 To change any of this, edit `brawlhalalla-config.json` next to the program. Delete that file and the
 program falls back to identical built-in defaults.
