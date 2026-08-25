@@ -246,7 +246,7 @@ static class Cli
             }
         }
 
-        Summary(report, legends, maps, config, archivesChanged, options.DryRun);
+        Summary(report, legends, maps, config, archivesChanged, options);
     }
 
     /// <summary>
@@ -367,8 +367,14 @@ static class Cli
         Console.WriteLine("  These are game files — do not commit them anywhere.");
     }
 
-    private static void Summary(Report report, RenameTable legends, RenameTable maps, Config config, int archivesChanged, bool dryRun)
+    private static void Summary(Report report, RenameTable legends, RenameTable maps, Config config, int filesChanged, Options options)
     {
+        bool dryRun = options.DryRun;
+
+        // With --only, anything living in a skipped file is absent by request, not missing.
+        bool mapsOutOfScope = !options.Includes("Init.swz");
+        bool legendNamesPartlyOutOfScope = !options.Includes("Game.swz");
+
         Line();
         Console.WriteLine("  SUMMARY");
         Line();
@@ -379,7 +385,11 @@ static class Cli
         }
         else if (report.LoreFieldsCleared > 0)
         {
-            Console.WriteLine($"  Lore stripped:   {report.LoreFieldsCleared} field(s) emptied across {report.LegendsSeen} legend(s)");
+            // LegendsSeen is only known when the archives were read; with --only languages it is 0,
+            // and "across 0 legends" reads like a failure rather than a skipped count.
+            Console.WriteLine(report.LegendsSeen > 0
+                ? $"  Lore stripped:   {report.LoreFieldsCleared} entries emptied across {report.LegendsSeen} legend(s)"
+                : $"  Lore stripped:   {report.LoreFieldsCleared} entries emptied");
         }
         else if (report.LoreFieldsPresent > 0)
         {
@@ -393,18 +403,33 @@ static class Cli
 
         Console.WriteLine();
         Console.WriteLine("  Legend renames:");
-        ReportRenames(legends, report, "legend");
+        ReportRenames(legends, report, "legend", legendNamesPartlyOutOfScope, "Game.swz was not patched (--only)");
 
         Console.WriteLine();
         Console.WriteLine("  Map renames:");
-        ReportRenames(maps, report, "map");
+        ReportRenames(maps, report, "map", mapsOutOfScope, "Init.swz was not patched (--only)");
 
         if (report.Audit.Count > 0)
         {
+            // The same edit is usually made identically in all 13 language files. Listing it once
+            // with a count is the difference between a readable summary and 195 lines of noise.
+            List<(string Detail, List<string> Scopes)> grouped =
+            [
+                .. report.Audit
+                    .GroupBy(a => a.Detail, StringComparer.Ordinal)
+                    .Select(g => (Detail: g.Key, Scopes: g.Select(a => a.Scope).Distinct(StringComparer.Ordinal).ToList()))
+                    .OrderBy(g => g.Scopes.Count == 1 ? g.Scopes[0] : "", StringComparer.Ordinal)
+                    .ThenBy(g => g.Detail, StringComparer.Ordinal)
+            ];
+
             Console.WriteLine();
-            Console.WriteLine($"  Every change made ({report.Audit.Count}):");
-            foreach (string entry in report.Audit)
-                Console.WriteLine($"    {entry}");
+            Console.WriteLine($"  Every change made ({grouped.Count} distinct, {report.Audit.Count} in total):");
+            foreach ((string detail, List<string> scopes) in grouped)
+            {
+                Console.WriteLine(scopes.Count == 1
+                    ? $"    {scopes[0]}: {detail}"
+                    : $"    {detail}   (in {scopes.Count} files)");
+            }
         }
 
         if (report.Observations.Count > 0)
@@ -430,23 +455,38 @@ static class Cli
             Console.WriteLine("  Dry run — no game files were modified.");
             Console.WriteLine("  Re-run without --dry-run to apply.");
         }
-        else if (archivesChanged == 0)
+        else if (filesChanged == 0)
         {
             Console.WriteLine("  Nothing needed changing. Your game files were not modified.");
             Console.WriteLine("  (If you expected changes, check the warnings above.)");
         }
         else
         {
-            Console.WriteLine($"  Done — {archivesChanged} archive(s) updated. Originals are in {Install.BackupDirName}/.");
+            Console.WriteLine($"  Done — {filesChanged} file(s) updated. Originals are in {Install.BackupDirName}/.");
             Console.WriteLine();
-            Console.WriteLine("  Launch in CASUAL or CUSTOM games, not Ranked.");
+
+            bool archivesTouched = Install.ArchiveNames.Any(options.Includes);
+            if (archivesTouched)
+            {
+                Console.WriteLine("  ONLINE PLAY WILL NOT WORK. Brawlhalla checks its archives and will report");
+                Console.WriteLine("  that you are on an old version. This configuration is for offline and local");
+                Console.WriteLine("  play only. For online, use:  --only languages");
+            }
+            else
+            {
+                Console.WriteLine("  Only the language files were changed, leaving the archives untouched.");
+                Console.WriteLine("  Online play worked in testing with this configuration, but it is not");
+                Console.WriteLine("  guaranteed — if you get an \"old version\" message, run with --restore.");
+            }
+
+            Console.WriteLine();
             Console.WriteLine("  Re-run this after any Brawlhalla update — patches replace these files.");
             Console.WriteLine("  To undo everything: run again with --restore");
         }
         Line();
     }
 
-    private static void ReportRenames(RenameTable table, Report report, string kind)
+    private static void ReportRenames(RenameTable table, Report report, string kind, bool outOfScope, string scopeReason)
     {
         if (table.IsEmpty)
         {
@@ -461,6 +501,11 @@ static class Cli
                 Console.WriteLine($"    OK   {from} -> applied ({hits} place{(hits == 1 ? "" : "s")})");
             else if (already > 0)
                 Console.WriteLine($"    DONE {from} -> already renamed ({already} place{(already == 1 ? "" : "s")})");
+            else if (outOfScope)
+            {
+                // Not a miss — the file that holds this name was deliberately left alone.
+                Console.WriteLine($"    SKIP {from} -> {scopeReason}");
+            }
             else
             {
                 Console.WriteLine($"    MISS {from} -> not found, unchanged");

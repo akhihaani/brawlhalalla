@@ -2,17 +2,20 @@ using System.Text;
 
 namespace Brawlhalalla;
 
+/// <summary>One change, and which file it happened in.</summary>
+public sealed record AuditEntry(string Scope, string Detail);
+
 /// <summary>Everything the run wants to tell the user afterwards.</summary>
 public sealed class Report
 {
     public int LegendsSeen;
     public int LoreFieldsCleared;
     public int LoreFieldsPresent;
-    public readonly List<string> Audit = [];
+    public readonly List<AuditEntry> Audit = [];
     public readonly List<string> Warnings = [];
     public readonly List<string> Observations = [];
 
-    public void Change(string entry, string detail) => Audit.Add($"{entry}: {detail}");
+    public void Change(string scope, string detail) => Audit.Add(new AuditEntry(scope, detail));
     public void Warn(string message) { if (!Warnings.Contains(message)) Warnings.Add(message); }
     public void Observe(string message) { if (!Observations.Contains(message)) Observations.Add(message); }
 }
